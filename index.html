@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revotick's Hideout</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- ВЕРХНЯЯ ПОЛОВИНА: Боевая Зона -->
+        <div id="combat-zone">
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- Оверлей для всплывающих уведомлений -->
+            <div id="notification-container"></div>
+
+            <!-- Game Over Screen -->
+            <div id="game-over-screen" class="hidden">
+                <h1>УБЕЖИЩЕ ПАЛО</h1>
+                <p>Баррикада разрушена, зомби сожрали всех.</p>
+                <button id="restart-btn">Начать заново</button>
+            </div>
+        </div>
+
+        <!-- НИЖНЯЯ ПОЛОВИНА: Менеджмент Убежища -->
+        <div id="management-zone">
+            <!-- Панель ресурсов -->
+            <div id="resource-panel">
+                <div class="resource-item" title="Хлам - основная валюта">
+                    <span class="res-icon">⚙️</span> Хлам: <span id="res-scrap">0</span> / <span id="res-scrap-max">100</span>
+                </div>
+                <div class="resource-item" title="Данные - для улучшений">
+                    <span class="res-icon">💾</span> Данные: <span id="res-data">0</span>
+                </div>
+                <div class="resource-item" title="Энергия - для работы комнат">
+                    <span class="res-icon">⚡</span> Энергия: <span id="res-energy">0</span>
+                </div>
+                <div class="resource-item" title="Прочность Баррикады">
+                    <span class="res-icon">🛡️</span> Баррикада: <span id="res-barricade">100</span> / <span id="res-barricade-max">100</span>
+                </div>
+                <div class="resource-item wave-info">
+                    Волна: <span id="res-wave">1</span> <button id="next-wave-btn">Начать Волну</button>
+                </div>
+            </div>
+
+            <!-- Вкладки меню -->
+            <div id="tabs">
+                <button class="tab-btn active" data-tab="tab-hideout">УБЕЖИЩЕ</button>
+                <button class="tab-btn" data-tab="tab-mercs">НАЕМНИКИ</button>
+                <button class="tab-btn" data-tab="tab-quests">КВЕСТЫ</button>
+            </div>
+
+            <!-- Контент вкладок -->
+            <div id="tab-content">
+
+                <!-- Вкладка Убежища -->
+                <div id="tab-hideout" class="tab-pane active">
+                    <div class="modules-grid" id="modules-container">
+                        <!-- Сюда JS рендерит комнаты -->
+                    </div>
+                </div>
+
+                <!-- Вкладка Наемников -->
+                <div id="tab-mercs" class="tab-pane">
+                    <div id="mercs-hiring">
+                        <h3>Найм Бойцов</h3>
+                        <div class="mercs-grid" id="mercs-container">
+                            <!-- JS рендерит наемников на покупку -->
+                        </div>
+                    </div>
+                    <div id="mercs-active">
+                        <h3>Активный Отряд (макс. 5)</h3>
+                        <div id="active-squad-container" class="squad-list">
+                            <!-- JS рендерит активных бойцов -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Вкладка Квестов -->
+                <div id="tab-quests" class="tab-pane">
+                    <h3>Доступные и Активные Квесты</h3>
+                    <div id="quests-container" class="quests-list">
+                        <!-- JS рендерит квесты -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
