@@ -51,6 +51,60 @@ function checkQuests(type, val, targetType = null) {
 }
 
 // ==========================================
+// AUDIO SYSTEM
+// ==========================================
+const AUDIO_PATHS = {
+    bgMusic: 'music.mp3',
+    shoot: 'shoot.wav',
+    zombieDeath: 'death.wav',
+    click: 'click.wav',
+    error: 'error.wav'
+};
+
+const audioManager = {
+    muted: true, // Start muted to comply with browser autoplay policies
+    bgm: null,
+    sfxPool: {},
+
+    init() {
+        this.bgm = new Audio(AUDIO_PATHS.bgMusic);
+        this.bgm.loop = true;
+        this.bgm.volume = 0.3;
+
+        ['shoot', 'zombieDeath', 'click', 'error'].forEach(key => {
+            this.sfxPool[key] = [];
+            for (let i = 0; i < 5; i++) { // Pool of 5 audios per sound
+                const a = new Audio(AUDIO_PATHS[key]);
+                a.volume = 0.4;
+                this.sfxPool[key].push(a);
+            }
+        });
+    },
+
+    toggleMute() {
+        this.muted = !this.muted;
+        if (!this.muted) {
+            this.bgm.play().catch(() => {});
+        } else {
+            this.bgm.pause();
+        }
+        document.getElementById('mute-btn').innerText = this.muted ? '🔇' : '🔊';
+    },
+
+    playSfx(key) {
+        if (this.muted) return;
+        const pool = this.sfxPool[key];
+        if (pool) {
+            const audio = pool.find(a => a.paused || a.ended);
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(() => {});
+            }
+        }
+    }
+};
+
+// ==========================================
 // GLOBALS & CONSTANTS
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
@@ -69,7 +123,7 @@ class GameState {
     constructor() {
         this.resources = {
             scrap: 0,
-            scrapMax: 100,
+            scrapMax: 500,
             data: 0,
             energy: 0,
             barricade: 100,
@@ -77,13 +131,14 @@ class GameState {
         };
         this.wave = 1;
         this.waveInProgress = false;
+        this.autoWaveTimer = 0;
 
         this.modules = {
             generator: { level: 0, maxLevel: 5, name: 'Генератор', desc: 'Дает Энергию.', cost: 50 },
             workbench: { level: 0, maxLevel: 5, name: 'Верстак', desc: '+15% урон солдат.', cost: 100 },
             kitchen: { level: 0, maxLevel: 5, name: 'Пищеблок', desc: '+20% макс HP солдат.', cost: 150 },
             recreation: { level: 0, maxLevel: 5, name: 'Зона отдыха', desc: '+10% скорость стрельбы.', cost: 200 },
-            storage: { level: 0, maxLevel: 5, name: 'Склад', desc: 'Увеличивает лимит Хлама и прочность баррикады.', cost: 120 }
+            storage: { level: 0, maxLevel: 5, name: 'Склад', desc: 'Увеличивает лимит Хлама и прочность баррикады.', cost: 50 }
         };
         this.squad = [];
         this.quests = []; // To be populated
@@ -141,7 +196,8 @@ class GameState {
         this.entities = {
             zombies: [],
             bullets: [],
-            floatingTexts: []
+            floatingTexts: [],
+            particles: []
         };
     }
 
@@ -180,7 +236,7 @@ class GameState {
 
     applyModuleEffects() {
         // Recalculate max scrap and barricade from Storage
-        this.resources.scrapMax = 100 + (this.modules.storage.level * 50);
+        this.resources.scrapMax = 500 + (this.modules.storage.level * 500);
         this.resources.barricadeMax = 100 + (this.modules.storage.level * 50);
         // Energy from Generator
         this.resources.energy = this.modules.generator.level * 10;
@@ -201,8 +257,10 @@ class GameState {
             // Check energy requirement (except for generator)
             if (moduleId !== 'generator' && this.resources.energy < (mod.level + 1) * 5) {
                 ui.showNotification("Не хватает Энергии!", "error");
+                audioManager.playSfx('error');
                 return;
             }
+            audioManager.playSfx('click');
             this.resources.scrap -= mod.cost;
             mod.level++;
             mod.cost = Math.floor(mod.cost * 1.5);
@@ -214,6 +272,7 @@ class GameState {
             checkQuests('all_max');
         } else {
             ui.showNotification("Недостаточно хлама или макс уровень!", "error");
+            audioManager.playSfx('error');
         }
     }
 
@@ -234,6 +293,13 @@ class GameState {
                     if (this.resources.barricade > 0) {
                         this.resources.barricade -= z.damage;
                         ui.updateResources();
+
+                        // Barricade Splinters
+                        for (let p = 0; p < 5; p++) {
+                            const vx = (Math.random() - 0.5) * 200;
+                            const vy = -Math.random() * 150 - 50;
+                            this.entities.particles.push(new Particle(140, gameHeight - 60 - Math.random() * 60, '#8d6e63', 3, vx, vy, 500));
+                        }
                     } else {
                         // Damage random soldier
                         if (this.squad.length > 0) {
@@ -260,6 +326,17 @@ class GameState {
                         this.resources.data += 1;
                         checkQuests('collect_data', 1);
                     }
+
+                    // Death Particles
+                    for (let p = 0; p < 15; p++) {
+                        const vx = (Math.random() - 0.5) * 400;
+                        const vy = -Math.random() * 300 - 100;
+                        const size = Math.random() * 4 + 2;
+                        const color = z.type.includes('Дрон') ? '#555' : '#B71C1C';
+                        this.entities.particles.push(new Particle(z.x, z.y - 15, color, size, vx, vy, 1000 + Math.random() * 1000));
+                    }
+
+                    audioManager.playSfx('zombieDeath');
                     this.entities.zombies.splice(i, 1);
                     ui.updateResources();
                     checkQuests('kill_zombie', 1);
@@ -298,11 +375,65 @@ class GameState {
         // Update floating texts
         this.entities.floatingTexts.forEach(ft => ft.update(dt));
         this.entities.floatingTexts = this.entities.floatingTexts.filter(ft => ft.active);
+
+        // Update particles
+        this.entities.particles.forEach(p => p.update(dt));
+        this.entities.particles = this.entities.particles.filter(p => p.active);
+
+        // Handle auto-wave countdown
+        if (!this.waveInProgress && this.autoWaveTimer > 0) {
+            const oldTimer = Math.ceil(this.autoWaveTimer / 1000);
+            this.autoWaveTimer -= dt;
+            const newTimer = Math.ceil(this.autoWaveTimer / 1000);
+
+            if (oldTimer !== newTimer && newTimer > 0) {
+                this.addFloatingText(`${newTimer}...`, gameWidth / 2, gameHeight / 2, '#ffb300', 800);
+            }
+
+            if (this.autoWaveTimer <= 0) {
+                this.startWave();
+            }
+        }
+    }
+
+    dismissMerc(index) {
+        if (index < 0 || index >= this.squad.length) return;
+
+        const soldier = this.squad[index];
+        let baseCost = 0;
+        if (soldier.type === 'Новобранец') baseCost = 50;
+        else if (soldier.type === 'Штурмовик') baseCost = 150;
+        else if (soldier.type === 'Снайпер') baseCost = 250;
+
+        const refund = Math.floor((baseCost * (1 - (this.modules.recreation.level * 0.05))) / 2);
+
+        this.resources.scrap = Math.min(this.resources.scrapMax, this.resources.scrap + refund);
+
+        // Teleport/dissolve particles
+        for (let p = 0; p < 20; p++) {
+            const vx = (Math.random() - 0.5) * 200;
+            const vy = -Math.random() * 200 - 50;
+            const size = Math.random() * 4 + 2;
+            this.entities.particles.push(new Particle(soldier.x, soldier.y - 15, '#00f3ff', size, vx, vy, 800 + Math.random() * 500));
+        }
+
+        this.squad.splice(index, 1);
+
+        // Reposition remaining squad
+        this.squad.forEach((s, i) => {
+            s.y = gameHeight - 150 - (i * 40);
+        });
+
+        this.save();
+        ui.updateAll();
+        audioManager.playSfx('click');
+        ui.showNotification(`Боец уволен. Возвращено ${refund} ⚙️`, "info");
     }
 
     hireMerc(type) {
         if (this.squad.length >= 5) {
             ui.showNotification("Отряд полон!", "error");
+            audioManager.playSfx('error');
             return;
         }
 
@@ -328,19 +459,71 @@ class GameState {
             ui.updateAll();
             ui.renderSquad();
             ui.showNotification(`${type} нанят!`);
+            audioManager.playSfx('click');
             checkQuests('hire_merc', 1, type);
             checkQuests('squad_size', this.squad.length);
         } else {
             ui.showNotification("Недостаточно хлама!", "error");
+            audioManager.playSfx('error');
         }
     }
 
     draw(ctx) {
-        // Draw background
-        ctx.fillStyle = '#0d0d0d';
+        // Procedural Parallax Background
+
+        // Base Sky
+        ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, gameWidth, gameHeight);
 
-        // Ground
+        // Acid Fog / Toxic Atmosphere (Procedural)
+        const timeOffset = Date.now() / 2000;
+        for (let f = 0; f < 10; f++) {
+            const fx = (Math.sin(timeOffset + f) * 200 + (f * gameWidth/10)) % gameWidth;
+            const fy = gameHeight - 150 + Math.cos(timeOffset * 0.5 + f) * 50;
+
+            const gradient = ctx.createRadialGradient(fx, fy, 0, fx, fy, 150);
+            gradient.addColorStop(0, 'rgba(139, 195, 74, 0.05)'); // subtle acid green
+            gradient.addColorStop(1, 'rgba(139, 195, 74, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(fx - 150, fy - 150, 300, 300);
+        }
+
+        // Far Layer: City Skyline
+        ctx.fillStyle = '#111111';
+        // Random deterministic seed based on width so it stays static per resize
+        let seed = 12345;
+        function random() {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // Draw buildings
+        let bx = 0;
+        while(bx < gameWidth) {
+            let bw = 30 + random() * 50;
+            let bh = 150 + random() * 150;
+            ctx.fillRect(bx, gameHeight - 30 - bh, bw, bh);
+            bx += bw + (random() * 20);
+        }
+
+        // Mid Layer: Trash Piles
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.moveTo(0, gameHeight - 30);
+        let px = 0;
+        seed = 54321;
+        while (px <= gameWidth) {
+            let step = 40 + random() * 60;
+            let height = 30 + random() * 60;
+            px += step;
+            ctx.lineTo(px, gameHeight - 30 - height);
+        }
+        ctx.lineTo(gameWidth, gameHeight - 30);
+        ctx.lineTo(0, gameHeight - 30);
+        ctx.fill();
+
+        // Ground (Near layer)
         ctx.fillStyle = '#222';
         ctx.fillRect(0, gameHeight - 30, gameWidth, 30);
 
@@ -360,6 +543,7 @@ class GameState {
         }
 
         // Draw entities
+        this.entities.particles.forEach(p => p.draw(ctx));
         this.squad.forEach(s => s.draw(ctx));
         this.entities.zombies.forEach(z => z.draw(ctx));
         this.entities.bullets.forEach(b => b.draw(ctx));
@@ -369,6 +553,7 @@ class GameState {
     startWave() {
         if (this.waveInProgress || (this.squad.length === 0 && this.resources.barricade <= 0)) return;
         this.waveInProgress = true;
+        this.autoWaveTimer = 0; // Clear timer if manually started
         this.waveEnemiesTotal = 5 + (this.wave * 3);
         this.waveEnemiesSpawned = 0;
         this.spawnTimer = 1000;
@@ -393,6 +578,13 @@ class GameState {
         document.getElementById('next-wave-btn').disabled = false;
         ui.showNotification("Волна отбита! Отряд подлечился.", "info");
         checkQuests('survive_wave', this.wave - 1);
+
+        // Auto-wave trigger
+        if (document.getElementById('auto-wave-checkbox').checked && this.squad.length > 0) {
+            this.autoWaveTimer = 3000;
+            document.getElementById('next-wave-btn').disabled = true;
+            this.addFloatingText("Следующая волна через 3...", gameWidth / 2 - 100, gameHeight / 2, '#ffb300', 800);
+        }
     }
 
     spawnZombie() {
@@ -409,8 +601,11 @@ class GameState {
         this.waveEnemiesSpawned++;
     }
 
-    addFloatingText(text, x, y, color) {
-        this.entities.floatingTexts.push(new FloatingText(text, x, y, color));
+    addFloatingText(text, x, y, color, life = 800) {
+        const ft = new FloatingText(text, x, y, color);
+        ft.life = life;
+        ft.maxLife = life;
+        this.entities.floatingTexts.push(ft);
     }
 }
 
@@ -430,10 +625,12 @@ class Soldier {
 
         this.hp = this.maxHp;
         this.lastShot = 0;
+        this.muzzleTimer = 0;
     }
 
     update(dt, zombies) {
         this.lastShot -= dt;
+        if (this.muzzleTimer > 0) this.muzzleTimer -= dt;
 
         if (this.lastShot <= 0 && zombies.length > 0) {
             // Find closest zombie
@@ -452,7 +649,16 @@ class Soldier {
             const rateBuff = 1 - (gameState.modules.recreation.level * 0.10);
 
             gameState.entities.bullets.push(new Bullet(this.x + 10, this.y - 10, target, this.damage * dmgBuff));
+
+            // Bullet shells particles
+            const shellVx = -Math.random() * 50 - 50;
+            const shellVy = -Math.random() * 100 - 50;
+            gameState.entities.particles.push(new Particle(this.x + 5, this.y - 15, '#FFD700', 2, shellVx, shellVy, 800));
+
             this.lastShot = this.fireRate * Math.max(0.2, rateBuff);
+            this.muzzleTimer = 50; // 50ms muzzle flash
+
+            audioManager.playSfx('shoot');
         }
     }
 
@@ -468,6 +674,17 @@ class Soldier {
         // Gun
         ctx.fillStyle = '#fff';
         ctx.fillRect(this.x, this.y - 15, 15, 4);
+
+        // Muzzle Flash
+        if (this.muzzleTimer > 0) {
+            ctx.fillStyle = '#ffb300';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ffb300';
+            ctx.beginPath();
+            ctx.arc(this.x + 18, this.y - 13, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
     }
 }
 
@@ -488,10 +705,12 @@ class Zombie {
             this.maxHp = 300 * scale; this.speed = 15; this.damage = 25; this.scrapReward = 50; this.color = '#B71C1C'; this.size = 1.8;
         }
         this.hp = this.maxHp;
+        this.hitFlashTimer = 0;
     }
 
     update(dt) {
         if (this.attackTimer > 0) this.attackTimer -= dt;
+        if (this.hitFlashTimer > 0) this.hitFlashTimer -= dt;
 
         // Move if not at barricade
         if (this.x > 140 || (gameState.resources.barricade <= 0 && this.x > 50)) {
@@ -500,7 +719,7 @@ class Zombie {
     }
 
     draw(ctx) {
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = this.hitFlashTimer > 0 ? '#ffffff' : this.color;
         const w = 20 * this.size;
         const h = 30 * this.size;
 
@@ -510,6 +729,14 @@ class Zombie {
         ctx.beginPath();
         ctx.arc(this.x, this.y - h - (5*this.size), 8*this.size, 0, Math.PI * 2);
         ctx.fill();
+
+        // Glowing Eyes
+        ctx.fillStyle = 'red';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = 'red';
+        ctx.fillRect(this.x - 4*this.size, this.y - h - 6*this.size, 2*this.size, 2*this.size);
+        ctx.fillRect(this.x, this.y - h - 6*this.size, 2*this.size, 2*this.size);
+        ctx.shadowBlur = 0;
 
         // HP Bar
         ctx.fillStyle = '#ff3333';
@@ -542,6 +769,7 @@ class Bullet {
         if (dist < 10) {
             // Hit
             this.target.hp -= this.damage;
+            this.target.hitFlashTimer = 50; // 50ms hit flash
             gameState.addFloatingText(`${Math.floor(this.damage)}`, this.target.x, this.target.y - 40, '#ffb300');
             this.active = false;
         } else {
@@ -553,18 +781,74 @@ class Bullet {
     }
 
     draw(ctx) {
-        ctx.fillStyle = '#ffb300';
+        ctx.shadowBlur = 10;
+
+        // Special color for high damage (sniper)
+        if (this.damage > 50) {
+            ctx.fillStyle = '#ff3333';
+            ctx.shadowColor = '#ff3333';
+            ctx.strokeStyle = 'rgba(255, 51, 51, 0.8)';
+        } else {
+            ctx.fillStyle = '#00f3ff';
+            ctx.shadowColor = '#00f3ff';
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.8)';
+        }
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
         ctx.fill();
 
         // Tracer
-        ctx.strokeStyle = 'rgba(255, 179, 0, 0.5)';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - 10, this.y); // Simplified tracer
+        ctx.lineTo(this.x - 15, this.y);
         ctx.stroke();
+
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Particle {
+    constructor(x, y, color, size, vx, vy, life) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = size;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = life;
+        this.maxLife = life;
+        this.active = true;
+        this.gravity = 800; // pixels per sec^2
+        this.floorY = gameHeight - 30;
+    }
+
+    update(dt) {
+        if (!this.active) return;
+
+        const dtSec = dt / 1000;
+
+        this.vy += this.gravity * dtSec;
+        this.x += this.vx * dtSec;
+        this.y += this.vy * dtSec;
+
+        // Floor collision
+        if (this.y >= this.floorY) {
+            this.y = this.floorY;
+            this.vy = -this.vy * 0.4; // Bounce
+            this.vx *= 0.8; // Friction
+        }
+
+        this.life -= dt;
+        if (this.life <= 0) this.active = false;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.globalAlpha = 1.0;
     }
 }
 
@@ -698,7 +982,7 @@ const ui = {
         const container = document.getElementById('active-squad-container');
         container.innerHTML = '';
 
-        gameState.squad.forEach(s => {
+        gameState.squad.forEach((s, index) => {
             const div = document.createElement('div');
             div.className = 'squad-item';
             const hpPct = (s.hp / s.maxHp) * 100;
@@ -709,9 +993,10 @@ const ui = {
                         <div class="squad-item-hp-fill" style="width: ${hpPct}%"></div>
                     </div>
                 </div>
-                <div style="color: #bbb; font-size: 12px; margin-left: 10px;">
+                <div style="color: #bbb; font-size: 12px; margin-left: 10px; margin-right: 10px;">
                     HP: ${Math.floor(s.hp)}/${Math.floor(s.maxHp)}
                 </div>
+                <button onclick="gameState.dismissMerc(${index})" style="padding: 5px; background: #ff3333; color: white; border: none; cursor: pointer; border-radius: 3px;" title="Уволить (вернет 50% хлама)">✖</button>
             `;
             container.appendChild(div);
         });
@@ -789,6 +1074,11 @@ function init() {
 
     // Give some starting resources for testing
     gameState.resources.scrap = 200;
+
+    audioManager.init();
+    document.getElementById('mute-btn').addEventListener('click', () => {
+        audioManager.toggleMute();
+    });
 
     gameState.load();
     ui.setupTabs();
