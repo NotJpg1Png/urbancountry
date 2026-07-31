@@ -42,7 +42,11 @@ class GameState:
             "food_block": {"level": 0},
             "workbench": {"level": 0},
             "recreation": {"level": 0},
-            "storage": {"level": 0}
+            "storage": {"level": 0},
+            "medbay": {"level": 0},
+            "training": {"level": 0},
+            "radio": {"level": 0},
+            "armory": {"level": 0}
         }
         self.soldiers = []
         self.door_hp = 1000
@@ -103,7 +107,10 @@ class GameState:
         if self.supplies > self.max_supplies:
             self.supplies = self.max_supplies
 
-        self.door_max_hp = 1000 + (self.modules["storage"]["level"] * 100)
+        self.hp_regen = self.modules["medbay"]["level"] * 2
+        self.dmg_buff *= (1.0 + self.modules["training"]["level"] * 0.10)
+        self.supplies_income = self.modules["radio"]["level"] * 5
+        self.door_max_hp = 1000 + (self.modules["storage"]["level"] * 100) + (self.modules["armory"]["level"] * 200)
         if hasattr(self, 'door_hp') and self.door_hp > self.door_max_hp:
             self.door_hp = self.door_max_hp
 
@@ -179,6 +186,40 @@ class Soldier:
         else:
             self.x = 200 + random.randint(-20, 20)
             self.y = HEIGHT - 200 + random.randint(-20, 20)
+
+        self.shelter_x = WIDTH // 2 + random.randint(-50, 50)
+        self.shelter_y = HEIGHT - 100
+        self.target_sx = self.shelter_x
+        self.target_sy = self.shelter_y
+        self.shelter_timer = 0
+
+    def update_shelter(self, dt, shelter_ui):
+        if self.hp <= 0 or self.cls_name == "turret": return
+
+        # Move towards target
+        dx = self.target_sx - self.shelter_x
+        dy = self.target_sy - self.shelter_y
+        dist = math.hypot(dx, dy)
+        if dist > 5:
+            speed = 50
+            self.shelter_x += (dx/dist) * speed * dt
+            self.shelter_y += (dy/dist) * speed * dt
+        else:
+            self.shelter_timer -= dt
+            if self.shelter_timer <= 0:
+                # Pick a random unlocked room
+                available_rooms = [m_id for m_id, m_data in shelter_ui.state_ref.modules.items() if m_data["level"] > 0]
+                if available_rooms:
+                    room_id = random.choice(available_rooms)
+                    rx, ry, rw, rh = shelter_ui.positions[room_id]
+                    self.target_sx = rx + random.randint(20, rw - 20)
+                    self.target_sy = ry + rh - 20
+                self.shelter_timer = random.uniform(3, 8)
+
+    def draw_shelter(self, screen):
+        if self.hp <= 0 or self.cls_name == "turret": return
+        pygame.draw.circle(screen, self.color, (int(self.shelter_x), int(self.shelter_y)), 10)
+        pygame.draw.circle(screen, BLACK, (int(self.shelter_x), int(self.shelter_y)), 10, 1)
 
     def update(self, dt, state, zombies, bullets, floating_texts):
         if self.hp <= 0: return
@@ -517,49 +558,67 @@ class CombatManager:
                     state.soldiers.append(Soldier(cls_name, state))
 
 MODULE_INFO = {
-    "generator": {"name": "ГЕНЕРАТОРНАЯ", "desc": "Производит Энергию (+5 за ур.)", "cost": 50},
-    "food_block": {"name": "ПИЩЕБЛОК", "desc": "+15% HP солдат за ур.", "cost": 40},
-    "workbench": {"name": "ВЕРСТАК", "desc": "+20% Урон за ур.", "cost": 60},
-    "recreation": {"name": "ЗОНА ОТДЫХА", "desc": "+10% Скор. атаки, -5% Цена найма", "cost": 45},
-    "storage": {"name": "СКЛАД", "desc": "+100 HP Двери, +Вместимость", "cost": 30}
+    "generator": {"name": "ГЕНЕРАТОРНАЯ", "desc": "Производит Энергию (+5 за ур.)", "cost": 50, "color": (80, 80, 50)},
+    "food_block": {"name": "ПИЩЕБЛОК", "desc": "+15% HP солдат за ур.", "cost": 40, "color": (50, 80, 50)},
+    "workbench": {"name": "ВЕРСТАК", "desc": "+20% Урон за ур.", "cost": 60, "color": (80, 50, 50)},
+    "recreation": {"name": "ЗОНА ОТДЫХА", "desc": "+10% Скор. атаки, -5% Цена", "cost": 45, "color": (50, 50, 80)},
+    "storage": {"name": "СКЛАД", "desc": "+100 HP Двери, +Вместимость", "cost": 30, "color": (60, 60, 60)},
+    "medbay": {"name": "МЕДБЛОК", "desc": "+2 Реген HP/сек за ур.", "cost": 55, "color": (50, 80, 80)},
+    "training": {"name": "ТРЕНИРОВОЧНАЯ", "desc": "+10% Урон (Множитель)", "cost": 65, "color": (80, 60, 40)},
+    "radio": {"name": "РАДИОРУБКА", "desc": "+5 Припасов/10 сек", "cost": 75, "color": (40, 80, 40)},
+    "armory": {"name": "ОРУЖЕЙНАЯ", "desc": "+200 HP Двери за ур.", "cost": 85, "color": (70, 40, 40)}
 }
 
 class ShelterUI:
     def __init__(self):
         self.buttons = {}
+        self.state_ref = None # Will set during update
+        # 3x3 Grid layout for 9 modules
+        self.positions = {}
+        idx = 0
+        grid_cols = 3
+        cell_w, cell_h = 300, 180
+        start_x, start_y = 50, 110
+        for mod_id in MODULE_INFO.keys():
+            col = idx % grid_cols
+            row = idx // grid_cols
+            self.positions[mod_id] = (start_x + col * (cell_w + 10), start_y + row * (cell_h + 10), cell_w, cell_h)
+            idx += 1
 
     def draw(self, screen, state):
-        screen.fill((30, 30, 30)) # Bunker dark grey
-
-        # Grid layout for 5 modules
-        positions = [
-            (50, 120), (500, 120),
-            (50, 320), (500, 320),
-            (275, 520)
-        ]
+        screen.fill((20, 20, 25)) # Deep underground bunker background
 
         self.buttons.clear()
 
-        for i, (mod_id, mod_data) in enumerate(MODULE_INFO.items()):
-            x, y = positions[i]
-            w, h = 400, 150
+        # Draw central elevator shaft/corridor
+        pygame.draw.rect(screen, (40, 40, 45), (480, 100, 40, 600))
 
-            # Module Box
-            pygame.draw.rect(screen, (50, 50, 60), (x, y, w, h), border_radius=10)
-            pygame.draw.rect(screen, LIGHT_GRAY, (x, y, w, h), 2, border_radius=10)
+        for mod_id, mod_data in MODULE_INFO.items():
+            x, y, w, h = self.positions[mod_id]
+            color = mod_data.get("color", (50, 50, 60))
 
-            lvl = state.modules[mod_id]["level"]
+            # Module Box (Room)
+            pygame.draw.rect(screen, color, (x, y, w, h), border_radius=5)
+            pygame.draw.rect(screen, LIGHT_GRAY, (x, y, w, h), 3, border_radius=5)
+
+            # Draw door to corridor
+            if x < 480: # Left side
+                pygame.draw.rect(screen, GRAY, (x + w - 10, y + h - 60, 10, 60))
+            elif x > 480: # Right side
+                pygame.draw.rect(screen, GRAY, (x, y + h - 60, 10, 60))
+
+            lvl = state.modules.get(mod_id, {"level": 0})["level"]
 
             # Text
-            name_text = font_large.render(f"{mod_data['name']} (Ур. {lvl})", True, CYAN)
-            screen.blit(name_text, (x + 20, y + 20))
+            name_text = font_medium.render(f"{mod_data['name']} (Ур. {lvl})", True, CYAN)
+            screen.blit(name_text, (x + 10, y + 10))
 
             desc_text = font_small.render(mod_data['desc'], True, WHITE)
-            screen.blit(desc_text, (x + 20, y + 60))
+            screen.blit(desc_text, (x + 10, y + 40))
 
             # Upgrade button
             cost = mod_data['cost'] * (lvl + 1)
-            btn_rect = pygame.Rect(x + w - 160, y + h - 50, 140, 40)
+            btn_rect = pygame.Rect(x + w - 110, y + h - 45, 100, 35)
 
             can_afford_supplies = state.supplies >= cost
             can_afford_energy = (mod_id == "generator") or ((state.energy_total - state.energy_used) >= 1)
@@ -567,21 +626,26 @@ class ShelterUI:
             btn_color = GREEN if (can_afford_supplies and can_afford_energy) else RED
             pygame.draw.rect(screen, btn_color, btn_rect, border_radius=5)
 
-            upg_text = font_medium.render(f"Улучшить", True, WHITE)
+            upg_text = font_small.render(f"Улучшить", True, WHITE)
             screen.blit(upg_text, (btn_rect.centerx - upg_text.get_width()//2, btn_rect.centery - 15))
-            cost_text = font_small.render(f"{cost} Припасов", True, WHITE)
-            screen.blit(cost_text, (btn_rect.centerx - cost_text.get_width()//2, btn_rect.centery + 5))
+            cost_text = font_small.render(f"{cost} Прип.", True, WHITE)
+            screen.blit(cost_text, (btn_rect.centerx - cost_text.get_width()//2, btn_rect.centery + 2))
 
             if not can_afford_energy and mod_id != "generator":
-                warn_text = font_small.render("Нужна Энергия!", True, RED)
+                warn_text = font_small.render("Нет Энергии!", True, RED)
                 screen.blit(warn_text, (btn_rect.x, btn_rect.y - 20))
 
             self.buttons[mod_id] = btn_rect
 
+        # Draw Soldiers in Shelter
+        for s in state.soldiers:
+            if hasattr(s, 'draw_shelter'):
+                s.draw_shelter(screen)
+
     def handle_click(self, pos, state):
         for mod_id, btn_rect in self.buttons.items():
             if btn_rect.collidepoint(pos):
-                lvl = state.modules[mod_id]["level"]
+                lvl = state.modules.get(mod_id, {"level": 0})["level"]
                 cost = MODULE_INFO[mod_id]['cost'] * (lvl + 1)
 
                 can_afford_supplies = state.supplies >= cost
@@ -620,6 +684,10 @@ def main():
         if state.active_screen == "COMBAT":
             combat_mgr.update(dt, state, quest_sys)
         else:
+            shelter_ui.state_ref = state
+            for s in state.soldiers:
+                if hasattr(s, 'update_shelter'):
+                    s.update_shelter(dt, shelter_ui)
             quest_sys.check_quests(state, combat_mgr.floating_texts)
 
         # Autosave every 10 seconds

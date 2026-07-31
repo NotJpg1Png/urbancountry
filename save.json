@@ -1,1 +1,1 @@
-{"supplies": 100, "modules": {"generator": {"level": 0}, "food_block": {"level": 0}, "workbench": {"level": 0}, "recreation": {"level": 0}, "storage": {"level": 0}}, "soldiers": [], "wave": 1, "quest_id": 0, "quest_progress": {}}
+{"supplies": 100, "modules": {"generator": {"level": 0}, "food_block": {"level": 0}, "workbench": {"level": 0}, "recreation": {"level": 0}, "storage": {"level": 0}, "medbay": {"level": 0}, "training": {"level": 0}, "radio": {"level": 0}, "armory": {"level": 0}}, "soldiers": [], "wave": 1, "quest_id": 0, "quest_progress": {}}
