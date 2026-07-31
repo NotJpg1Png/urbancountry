@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revotick's Hideout</title>
+    <style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+body {
+    background-color: #111;
+    color: #eee;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    background-color: #1a1a1a;
+    border: 2px solid #4a4a4a;
+    box-shadow: 0 0 20px #000;
+}
+
+/* --- ВЕРХНЯЯ ПОЛОВИНА: Боевая Зона --- */
+#combat-zone {
+    flex: 1; /* Занимает доступное место (половину или больше) */
+    position: relative;
+    border-bottom: 4px solid #ffb300;
+    background-color: #0d0d0d;
+    overflow: hidden;
+    min-height: 40vh;
+}
+
+#gameCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Оверлей для уведомлений */
+#notification-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.notification {
+    background-color: rgba(26, 26, 26, 0.9);
+    border: 1px solid #ffb300;
+    color: #ffb300;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-weight: bold;
+    animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 2.5s forwards;
+    box-shadow: 0 0 10px rgba(255, 179, 0, 0.2);
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Game Over */
+#game-over-screen {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(17, 17, 17, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    color: #ff3333;
+}
+#game-over-screen h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 0 0 10px #ff0000; }
+#restart-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #4a4a4a;
+    color: #fff;
+    border: 1px solid #ff3333;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: 0.2s;
+}
+#restart-btn:hover { background-color: #ff3333; }
+.hidden { display: none !important; }
+
+/* --- НИЖНЯЯ ПОЛОВИНА: Визуальный Бункер --- */
+#management-zone {
+    flex: 2; /* 2/3 экрана */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background-color: #261f1c; /* dirt color */
+    overflow: hidden;
+}
+
+#bunkerCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Панель ресурсов (Overlay) */
+.overlay-panel {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: rgba(42, 42, 42, 0.9);
+    border-bottom: 2px solid #4a4a4a;
+    font-size: 14px;
+    z-index: 10;
+}
+
+.resource-item {
+    display: flex;
+    align-items: center;
+    color: #ccc;
+}
+.resource-item span:not(.res-icon) {
+    color: #ffb300;
+    font-weight: bold;
+    margin-left: 5px;
+}
+.res-icon { margin-right: 5px; font-size: 1.1rem;}
+
+.wave-info {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+}
+#next-wave-btn {
+    margin-left: 15px;
+    padding: 5px 15px;
+    background-color: #ffb300;
+    color: #1a1a1a;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 3px;
+}
+#next-wave-btn:hover { background-color: #ffc133; }
+#next-wave-btn:disabled { background-color: #555; color: #888; cursor: not-allowed; }
+
+/* Overlay Меню */
+#bunker-menu-buttons {
+    position: absolute;
+    bottom: 20px; right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+.ui-menu-btn {
+    padding: 10px 20px;
+    background-color: #4a4a4a;
+    border: 2px solid #ffb300;
+    color: #ffb300;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.ui-menu-btn:hover { background-color: #ffb300; color: #1a1a1a; }
+
+/* Modals */
+.modal {
+    position: absolute;
+    top: 50px; left: 0; right: 0; bottom: 0;
+    background: rgba(17,17,17,0.8);
+    z-index: 15;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 50px;
+    overflow-y: auto;
+}
+.modal-content {
+    background: #1a1a1a;
+    border: 2px solid #ffb300;
+    padding: 20px;
+    width: 400px;
+    position: relative;
+    border-radius: 5px;
+}
+.large-modal { width: 800px; max-width: 95%; }
+.close-modal {
+    position: absolute;
+    top: 10px; right: 15px;
+    color: #ffb300;
+    font-size: 24px;
+    cursor: pointer;
+}
+.mercs-layout { display: flex; gap: 20px; }
+.mercs-layout > div { flex: 1; }
+
+#modal-room-title { color: #ffb300; margin-bottom: 10px; border-bottom: 1px dashed #4a4a4a; padding-bottom: 5px; }
+#modal-room-desc { font-size: 14px; margin-bottom: 15px; color: #ccc;}
+#modal-room-stats { font-size: 14px; margin-bottom: 15px; color: #fff;}
+#modal-room-upgrade-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #4a4a4a;
+    border: 1px solid #ffb300;
+    color: #ffb300;
+    font-weight: bold;
+    cursor: pointer;
+}
+#modal-room-upgrade-btn:hover { background-color: #ffb300; color: #1a1a1a; }
+#modal-room-upgrade-btn:disabled { background-color: #333; color: #666; border-color: #555; cursor: not-allowed; }
+
+#tech-tree-container { display: flex; flex-direction: column; gap: 10px; margin-top: 10px;}
+.tech-item {
+    background: #222;
+    padding: 10px;
+    border-left: 3px solid #00f3ff;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.tech-item button { padding: 5px 10px; background: #4a4a4a; border: 1px solid #00f3ff; color: #00f3ff; cursor: pointer;}
+.tech-item button:hover { background: #00f3ff; color: #111; }
+.tech-item button:disabled { background: #333; color: #666; border-color: #555; cursor: not-allowed; }
+
+/* Сетка Модулей */
+.modules-grid, .mercs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+/* Карточки */
+.card {
+    background-color: #2a2a2a;
+    border: 1px solid #4a4a4a;
+    border-radius: 5px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.card h4 {
+    color: #ffb300;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed #4a4a4a;
+    padding-bottom: 5px;
+}
+.card p { font-size: 12px; color: #bbb; margin-bottom: 10px; line-height: 1.4; flex-grow: 1;}
+.card .stats { font-size: 12px; color: #fff; margin-bottom: 10px; }
+.card .stats span { color: #ffb300; }
+.card button {
+    padding: 8px;
+    background-color: #4a4a4a;
+    border: 1px solid #ffb300;
+    color: #ffb300;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+.card button:hover { background-color: #ffb300; color: #1a1a1a; }
+.card button:disabled { background-color: #333; border-color: #555; color: #666; cursor: not-allowed; }
+
+/* Наемники - Активные */
+h3 { color: #fff; margin-bottom: 15px; margin-top: 15px; border-bottom: 1px solid #4a4a4a; padding-bottom: 5px;}
+#mercs-hiring h3 { margin-top: 0; }
+
+.squad-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.squad-item {
+    background-color: #222;
+    border-left: 3px solid #ffb300;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.squad-item-info { flex: 1; }
+.squad-item-name { color: #fff; font-weight: bold; }
+.squad-item-hp-bar {
+    width: 100%;
+    height: 6px;
+    background-color: #444;
+    margin-top: 5px;
+    border-radius: 3px;
+}
+.squad-item-hp-fill {
+    height: 100%;
+    background-color: #4caf50;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+/* Квесты */
+.quests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.quest-item {
+    background-color: #222;
+    border: 1px solid #4a4a4a;
+    padding: 15px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.quest-info h4 { color: #ffb300; margin-bottom: 5px; }
+.quest-info p { font-size: 12px; color: #aaa; }
+.quest-reward { font-size: 13px; color: #4caf50; font-weight: bold; margin-top: 5px;}
+.quest-progress-text { font-size: 14px; font-weight: bold; color: #fff;}
+.quest-status.completed { color: #4caf50; font-weight: bold; }
+
+</style>
+</head>
+<body>
+    <div id="app">
+        <!-- ВЕРХНЯЯ ПОЛОВИНА: Боевая Зона -->
+        <div id="combat-zone">
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- Оверлей для всплывающих уведомлений -->
+            <div id="notification-container"></div>
+
+            <!-- Game Over Screen -->
+            <div id="game-over-screen" class="hidden">
+                <h1>УБЕЖИЩЕ ПАЛО</h1>
+                <p>Баррикада разрушена, зомби сожрали всех.</p>
+                <button id="restart-btn">Начать заново</button>
+            </div>
+        </div>
+
+        <!-- НИЖНЯЯ ПОЛОВИНА: Визуальный Бункер (2/3 экрана) -->
+        <div id="management-zone">
+
+            <!-- Панель ресурсов поверх всего (Absolute Overlay) -->
+            <div id="resource-panel" class="overlay-panel">
+                <div class="resource-item" title="Хлам - основная валюта">
+                    <span class="res-icon">⚙️</span> Хлам: <span id="res-scrap">0</span> / <span id="res-scrap-max">100</span>
+                </div>
+                <div class="resource-item" title="Данные - для улучшений">
+                    <span class="res-icon">💾</span> Данные: <span id="res-data">0</span>
+                </div>
+                <div class="resource-item" title="Энергия - для работы комнат">
+                    <span class="res-icon">⚡</span> Энергия: <span id="res-energy">0</span>
+                </div>
+                <div class="resource-item" title="Прочность Баррикады">
+                    <span class="res-icon">🛡️</span> Баррикада: <span id="res-barricade">100</span> / <span id="res-barricade-max">100</span>
+                </div>
+                <div class="resource-item wave-info">
+                    Волна: <span id="res-wave">1</span>
+                    <button id="next-wave-btn">Начать Волну</button>
+                    <label style="margin-left:10px; cursor:pointer;"><input type="checkbox" id="auto-wave-checkbox"> Авто-бой</label>
+                    <button id="mute-btn" style="margin-left: 15px; cursor:pointer; background:none; border:none; color:white; font-size:18px;">🔇</button>
+                </div>
+            </div>
+
+            <!-- Canvas для визуала бункера -->
+            <canvas id="bunkerCanvas"></canvas>
+
+            <!-- Overlay UI кнопки меню (Наемники, Квесты) -->
+            <div id="bunker-menu-buttons">
+                <button class="ui-menu-btn" data-target="modal-mercs">НАЕМНИКИ</button>
+                <button class="ui-menu-btn" data-target="modal-quests">КВЕСТЫ</button>
+            </div>
+
+            <!-- Модальное окно для апгрейда комнаты -->
+            <div id="modal-room-upgrade" class="modal hidden">
+                <div class="modal-content">
+                    <span class="close-modal">&times;</span>
+                    <h2 id="modal-room-title">Комната</h2>
+                    <p id="modal-room-desc">Описание</p>
+                    <div id="modal-room-stats">Статистика</div>
+                    <button id="modal-room-upgrade-btn">Улучшить (50 ⚙️)</button>
+                    <!-- Вкладка Лаборатории (Дерево Технологий) показывается только для Лабы -->
+                    <div id="modal-lab-tech" class="hidden">
+                        <h3>Дерево Технологий (Трата Данных)</h3>
+                        <div id="tech-tree-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно для Наемников -->
+            <div id="modal-mercs" class="modal hidden">
+                <div class="modal-content large-modal">
+                    <span class="close-modal">&times;</span>
+                    <h2>Управление Отрядом</h2>
+                    <div class="mercs-layout">
+                        <div id="mercs-hiring">
+                            <h3>Найм Бойцов</h3>
+                            <div class="mercs-grid" id="mercs-container"></div>
+                        </div>
+                        <div id="mercs-active">
+                            <h3>Активный Отряд (макс. 5)</h3>
+                            <div id="active-squad-container" class="squad-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Модальное окно для Квестов -->
+            <div id="modal-quests" class="modal hidden">
+                <div class="modal-content large-modal">
+                    <span class="close-modal">&times;</span>
+                    <h2>Активные и Выполненные Квесты</h2>
+                    <div id="quests-container" class="quests-list"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <script>
+// ==========================================
+// QUESTS TRACKING FUNC
+// ==========================================
+function checkQuests(type, val, targetType = null) {
+    if (!gameState) return;
+
+    if (type === 'kill_zombie') {
+        gameState.questProgress.zombiesKilled += val;
+    }
+    if (type === 'collect_scrap') {
+        gameState.questProgress.scrapCollected = (gameState.questProgress.scrapCollected || 0) + val;
+    }
+    if (type === 'collect_data') {
+        gameState.questProgress.dataCollected = (gameState.questProgress.dataCollected || 0) + val;
+    }
+
+    // Check all quests
+    gameState.allQuests.forEach(q => {
+        if (gameState.completedQuests.includes(q.id)) return;
+
+        let completed = false;
+
+        if (q.type === 'kill_zombie' && gameState.questProgress.zombiesKilled >= q.target) completed = true;
+        if (q.type === 'build_module' && q.targetId === targetType && gameState.modules[q.targetId].level >= q.targetLvl) completed = true;
+        if (q.type === 'survive_wave' && type === 'survive_wave' && val >= q.target) completed = true;
+        if (q.type === 'reach_wave' && type === 'reach_wave' && val >= q.target) completed = true;
+        if (q.type === 'hire_merc' && type === 'hire_merc' && targetType === q.targetType) completed = true;
+        if (q.type === 'squad_size' && gameState.squad.length >= q.target) completed = true;
+        if (q.type === 'collect_scrap' && (gameState.questProgress.scrapCollected || 0) >= q.target) completed = true;
+        if (q.type === 'collect_data' && (gameState.questProgress.dataCollected || 0) >= q.target) completed = true;
+
+        // Modules all max
+        if (q.type === 'all_max') {
+            let allMax = true;
+            for (const key in gameState.modules) {
+                if (gameState.modules[key].level < gameState.modules[key].maxLevel) allMax = false;
+            }
+            if (allMax) completed = true;
+        }
+
+        if (completed) {
+            gameState.completedQuests.push(q.id);
+            gameState.resources.scrap = Math.min(gameState.resources.scrapMax, gameState.resources.scrap + q.reward.scrap);
+            gameState.resources.data += q.reward.data;
+            ui.showNotification(`Квест Выполнен: ${q.title}!`, 'info');
+            ui.updateAll();
+        }
+    });
+
+    if (ui.renderQuests) ui.renderQuests();
+}
+
+// ==========================================
+// AUDIO SYSTEM
+// ==========================================
+const AUDIO_PATHS = {
+    bgMusic: 'music.mp3',
+    shoot: 'shoot.wav',
+    zombieDeath: 'death.wav',
+    click: 'click.wav',
+    error: 'error.wav'
+};
+
+const audioManager = {
+    muted: true, // Start muted to comply with browser autoplay policies
+    bgm: null,
+    sfxPool: {},
+
+    init() {
+        this.bgm = new Audio(AUDIO_PATHS.bgMusic);
+        this.bgm.loop = true;
+        this.bgm.volume = 0.3;
+
+        ['shoot', 'zombieDeath', 'click', 'error'].forEach(key => {
+            this.sfxPool[key] = [];
+            for (let i = 0; i < 5; i++) { // Pool of 5 audios per sound
+                const a = new Audio(AUDIO_PATHS[key]);
+                a.volume = 0.4;
+                this.sfxPool[key].push(a);
+            }
+        });
+    },
+
+    toggleMute() {
+        this.muted = !this.muted;
+        if (!this.muted) {
+            this.bgm.play().catch(() => {});
+        } else {
+            this.bgm.pause();
+        }
+        document.getElementById('mute-btn').innerText = this.muted ? '🔇' : '🔊';
+    },
+
+    playSfx(key) {
+        if (this.muted) return;
+        const pool = this.sfxPool[key];
+        if (pool) {
+            const audio = pool.find(a => a.paused || a.ended);
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(() => {});
+            }
+        }
+    }
+};
+
+// ==========================================
+// GLOBALS & CONSTANTS
+// ==========================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const bunkerCanvas = document.getElementById('bunkerCanvas');
+const bunkerCtx = bunkerCanvas.getContext('2d');
+
+let gameWidth = 0;
+let gameHeight = 0;
+let bunkerWidth = 0;
+let bunkerHeight = 0;
+let lastTime = 0;
+let gameState = null; // Will hold the core game state instance
+
+// ==========================================
+// BASIC CLASS STRUCTURES
+// ==========================================
+
+class GameState {
+    constructor() {
+        this.resources = {
+            scrap: 0,
+            scrapMax: 500,
+            data: 0,
+            energy: 0,
+            barricade: 100,
+            barricadeMax: 100
+        };
+        this.wave = 1;
+        this.waveInProgress = false;
+        this.autoWaveTimer = 0;
+
+        this.modules = {
+            generator: { level: 0, maxLevel: 5, name: 'Генератор', desc: 'Дает Энергию.', cost: 50, layout: {x: 100, y: 100, w: 250, h: 120} },
+            workbench: { level: 0, maxLevel: 5, name: 'Верстак', desc: '+15% урон солдат.', cost: 100, layout: {x: 400, y: 100, w: 250, h: 120} },
+            kitchen: { level: 0, maxLevel: 5, name: 'Пищеблок', desc: '+20% макс HP солдат.', cost: 150, layout: {x: 700, y: 100, w: 250, h: 120} },
+            recreation: { level: 0, maxLevel: 5, name: 'Зона отдыха', desc: '+10% скорость стрельбы.', cost: 200, layout: {x: 100, y: 250, w: 250, h: 120} },
+            storage: { level: 0, maxLevel: 5, name: 'Склад', desc: 'Увеличивает лимит Хлама.', cost: 50, layout: {x: 400, y: 250, w: 250, h: 120} },
+            lab: { level: 0, maxLevel: 5, name: 'Лаборатория', desc: 'Дерево глобальных перков.', cost: 300, layout: {x: 700, y: 250, w: 250, h: 120} }
+        };
+
+        this.techTree = [
+            { id: 'crit', name: 'Критический Урон', desc: 'Шанс нанести 2x урон.', level: 0, maxLevel: 5, cost: 5, effectPerLevel: 0.05 },
+            { id: 'slow', name: 'Замедление Зомби', desc: 'Враги двигаются медленнее.', level: 0, maxLevel: 5, cost: 10, effectPerLevel: 0.05 }
+        ];
+
+        this.squad = [];
+        this.quests = []; // To be populated
+        this.completedQuests = [];
+        this.questProgress = {
+            zombiesKilled: 0
+        };
+
+        // 30+ Quests definition
+        this.allQuests = [
+            { id: 'q1', type: 'kill_zombie', target: 10, title: 'Первая кровь', desc: 'Убить 10 зомби.', reward: { scrap: 50, data: 0 } },
+            { id: 'q2', type: 'kill_zombie', target: 50, title: 'Очистка территории', desc: 'Убить 50 зомби.', reward: { scrap: 100, data: 2 } },
+            { id: 'q3', type: 'kill_zombie', target: 100, title: 'Истребитель', desc: 'Убить 100 зомби.', reward: { scrap: 200, data: 5 } },
+            { id: 'q4', type: 'kill_zombie', target: 500, title: 'Мясник', desc: 'Убить 500 зомби.', reward: { scrap: 500, data: 10 } },
+            { id: 'q5', type: 'kill_zombie', target: 1000, title: 'Легенда Пустошей', desc: 'Убить 1000 зомби.', reward: { scrap: 1000, data: 20 } },
+
+            { id: 'q6', type: 'build_module', targetId: 'generator', targetLvl: 1, title: 'Да будет свет', desc: 'Построить Генератор 1 уровня.', reward: { scrap: 30, data: 1 } },
+            { id: 'q7', type: 'build_module', targetId: 'generator', targetLvl: 3, title: 'Энергокризис отменяется', desc: 'Генератор 3 уровня.', reward: { scrap: 100, data: 3 } },
+            { id: 'q8', type: 'build_module', targetId: 'generator', targetLvl: 5, title: 'Бесконечная Энергия', desc: 'Максимальный Генератор.', reward: { scrap: 300, data: 5 } },
+
+            { id: 'q9', type: 'build_module', targetId: 'workbench', targetLvl: 1, title: 'Первые пушки', desc: 'Построить Верстак.', reward: { scrap: 50, data: 1 } },
+            { id: 'q10', type: 'build_module', targetId: 'workbench', targetLvl: 5, title: 'Оружейный Барон', desc: 'Верстак 5 уровня.', reward: { scrap: 400, data: 5 } },
+
+            { id: 'q11', type: 'build_module', targetId: 'kitchen', targetLvl: 1, title: 'Пора кушать', desc: 'Построить Пищеблок.', reward: { scrap: 60, data: 1 } },
+            { id: 'q12', type: 'build_module', targetId: 'kitchen', targetLvl: 5, title: 'Шеф-повар', desc: 'Пищеблок 5 уровня.', reward: { scrap: 400, data: 5 } },
+
+            { id: 'q13', type: 'build_module', targetId: 'recreation', targetLvl: 1, title: 'Перекур', desc: 'Зона отдыха 1 уровня.', reward: { scrap: 80, data: 1 } },
+            { id: 'q14', type: 'build_module', targetId: 'recreation', targetLvl: 5, title: 'Рай в Аду', desc: 'Зона отдыха 5 уровня.', reward: { scrap: 500, data: 5 } },
+
+            { id: 'q15', type: 'build_module', targetId: 'storage', targetLvl: 1, title: 'Плюшкин', desc: 'Построить Склад.', reward: { scrap: 50, data: 1 } },
+            { id: 'q16', type: 'build_module', targetId: 'storage', targetLvl: 5, title: 'Скрудж', desc: 'Склад 5 уровня.', reward: { scrap: 300, data: 5 } },
+
+            { id: 'q17', type: 'survive_wave', target: 5, title: 'Разминка', desc: 'Пережить 5 волну.', reward: { scrap: 100, data: 2 } },
+            { id: 'q18', type: 'survive_wave', target: 10, title: 'Крепкий орешек', desc: 'Пережить 10 волну.', reward: { scrap: 200, data: 5 } },
+            { id: 'q19', type: 'survive_wave', target: 15, title: 'Железный Человек', desc: 'Пережить 15 волну.', reward: { scrap: 300, data: 8 } },
+            { id: 'q20', type: 'survive_wave', target: 20, title: 'Неуязвимый', desc: 'Пережить 20 волну.', reward: { scrap: 500, data: 10 } },
+            { id: 'q21', type: 'survive_wave', target: 30, title: 'Ветеран', desc: 'Пережить 30 волну.', reward: { scrap: 1000, data: 20 } },
+            { id: 'q22', type: 'survive_wave', target: 50, title: 'Бессмертный', desc: 'Пережить 50 волну.', reward: { scrap: 2000, data: 50 } },
+
+            { id: 'q23', type: 'hire_merc', targetType: 'Новобранец', title: 'Пушечное мясо', desc: 'Нанять Новобранца.', reward: { scrap: 25, data: 0 } },
+            { id: 'q24', type: 'hire_merc', targetType: 'Штурмовик', title: 'Огневая мощь', desc: 'Нанять Штурмовика.', reward: { scrap: 75, data: 1 } },
+            { id: 'q25', type: 'hire_merc', targetType: 'Снайпер', title: 'Один выстрел', desc: 'Нанять Снайпера.', reward: { scrap: 125, data: 2 } },
+
+            { id: 'q26', type: 'squad_size', target: 5, title: 'Полный отряд', desc: 'Собрать отряд из 5 человек.', reward: { scrap: 200, data: 5 } },
+
+            { id: 'q27', type: 'reach_wave', target: 5, title: 'Начало конца', desc: 'Дойти до 5 волны.', reward: { scrap: 50, data: 1 } },
+            { id: 'q28', type: 'reach_wave', target: 10, title: 'Первый Босс', desc: 'Дойти до 10 волны.', reward: { scrap: 100, data: 2 } },
+
+            { id: 'q29', type: 'collect_scrap', target: 1000, title: 'Собиратель', desc: 'Накопить 1000 Хлама за всё время (награда: 10 Данных).', reward: { scrap: 0, data: 10 } },
+            { id: 'q30', type: 'collect_data', target: 50, title: 'Хакер', desc: 'Накопить 50 Данных за всё время.', reward: { scrap: 500, data: 0 } },
+
+            { id: 'q31', type: 'all_max', target: 1, title: 'Убежище Мечты', desc: 'Прокачать все модули на Максимум.', reward: { scrap: 5000, data: 100 } }
+        ];
+
+        // Add remaining quests up to 70
+        for (let i = 32; i <= 70; i++) {
+            if (i < 45) {
+                this.allQuests.push({ id: `q${i}`, type: 'kill_zombie', target: i * 100, title: `Охотник ур. ${i-31}`, desc: `Убить ${i*100} зомби.`, reward: { scrap: i * 50, data: 2 } });
+            } else if (i < 60) {
+                this.allQuests.push({ id: `q${i}`, type: 'collect_scrap', target: i * 500, title: `Плюшкин ур. ${i-44}`, desc: `Накопить ${i*500} Хлама.`, reward: { scrap: 0, data: 5 } });
+            } else {
+                this.allQuests.push({ id: `q${i}`, type: 'survive_wave', target: i + 10, title: `Выживший ур. ${i-59}`, desc: `Дойти до ${i+10} волны.`, reward: { scrap: 500, data: 10 } });
+            }
+        }
+
+        this.screenShakeTime = 0;
+        this.entities = {
+            zombies: [],
+            bullets: [],
+            floatingTexts: [],
+            particles: []
+        };
+    }
+
+    save() {
+        const saveData = {
+            resources: this.resources,
+            wave: this.wave,
+            modules: this.modules,
+            techTree: this.techTree,
+            squad: this.squad.map(s => ({ type: s.type, hp: s.hp, maxHp: s.maxHp })),
+            completedQuests: this.completedQuests,
+            questProgress: this.questProgress
+        };
+        localStorage.setItem('revotick_save', JSON.stringify(saveData));
+    }
+
+    load() {
+        const saved = localStorage.getItem('revotick_save');
+        if (saved) {
+            const data = JSON.parse(saved);
+            this.resources = data.resources;
+            this.wave = data.wave;
+            this.modules = data.modules;
+            if (data.techTree) this.techTree = data.techTree;
+            this.completedQuests = data.completedQuests || [];
+            this.questProgress = data.questProgress || { zombiesKilled: 0 };
+
+            // Re-instantiate soldiers
+            this.squad = data.squad.map((s, index) => {
+                const soldier = new Soldier(s.type, 50, gameHeight - 150 - (index * 40));
+                soldier.hp = s.hp;
+                soldier.maxHp = s.maxHp;
+                return soldier;
+            });
+            this.applyModuleEffects();
+        }
+    }
+
+    applyModuleEffects() {
+        // Recalculate max scrap and barricade from Storage
+        this.resources.scrapMax = 500 + (this.modules.storage.level * 500);
+        this.resources.barricadeMax = 100 + (this.modules.storage.level * 50);
+        // Energy from Generator
+        this.resources.energy = this.modules.generator.level * 10;
+
+        // Soldier buffs are applied on creation or when they shoot based on module level
+        // But maxHp from Kitchen applies immediately to current squad
+        const hpMultiplier = 1 + (this.modules.kitchen.level * 0.20);
+        this.squad.forEach(s => {
+            const baseHp = s.type === 'Новобранец' ? 100 : (s.type === 'Штурмовик' ? 120 : 80);
+            s.maxHp = baseHp * hpMultiplier;
+            if (s.hp > s.maxHp) s.hp = s.maxHp;
+        });
+    }
+
+    upgradeTech(techId) {
+        const tech = this.techTree.find(t => t.id === techId);
+        if (tech && tech.level < tech.maxLevel && this.resources.data >= tech.cost) {
+            this.resources.data -= tech.cost;
+            tech.level++;
+            tech.cost = Math.floor(tech.cost * 1.5);
+            audioManager.playSfx('click');
+            this.save();
+            ui.updateAll();
+            ui.openRoomModal('lab', this.modules['lab']); // Refresh lab window
+            ui.showNotification(`Технология ${tech.name} улучшена!`, 'info');
+        } else {
+            audioManager.playSfx('error');
+            ui.showNotification("Недостаточно Данных!", "error");
+        }
+    }
+
+    upgradeModule(moduleId) {
+        const mod = this.modules[moduleId];
+        if (mod && mod.level < mod.maxLevel && this.resources.scrap >= mod.cost) {
+            // Check energy requirement (except for generator)
+            if (moduleId !== 'generator' && this.resources.energy < (mod.level + 1) * 5) {
+                ui.showNotification("Не хватает Энергии!", "error");
+                audioManager.playSfx('error');
+                return;
+            }
+            audioManager.playSfx('click');
+            this.resources.scrap -= mod.cost;
+            mod.level++;
+            mod.cost = Math.floor(mod.cost * 1.5);
+            this.applyModuleEffects();
+            this.save();
+            ui.updateAll();
+            ui.showNotification(`Модуль ${mod.name} улучшен до ур. ${mod.level}`);
+            checkQuests('build_module', mod.level, moduleId);
+            checkQuests('all_max');
+        } else {
+            ui.showNotification("Недостаточно хлама или макс уровень!", "error");
+            audioManager.playSfx('error');
+        }
+    }
+
+    update(dt) {
+        if (this.waveInProgress) {
+            // Update bullets
+            this.entities.bullets.forEach(b => b.update(dt));
+
+            // Update zombies
+            this.entities.zombies.forEach(z => z.update(dt));
+
+            // Update soldiers (shooting logic)
+            this.squad.forEach(s => s.update(dt, this.entities.zombies));
+
+            // Handle Barricade and Soldier damage by zombies
+            this.entities.zombies.forEach(z => {
+                if (z.x <= 140 && z.attackTimer <= 0) {
+                    if (this.resources.barricade > 0) {
+                        this.resources.barricade -= z.damage;
+                        ui.updateResources();
+
+                        // Barricade Splinters
+                        for (let p = 0; p < 5; p++) {
+                            const vx = (Math.random() - 0.5) * 200;
+                            const vy = -Math.random() * 150 - 50;
+                            this.entities.particles.push(new Particle(140, gameHeight - 60 - Math.random() * 60, '#8d6e63', 3, vx, vy, 500));
+                        }
+                    } else {
+                        // Damage random soldier
+                        if (this.squad.length > 0) {
+                            const target = this.squad[Math.floor(Math.random() * this.squad.length)];
+                            target.hp -= z.damage;
+                            this.addFloatingText(`-${z.damage}`, target.x, target.y - 20, '#ff3333');
+                        }
+                    }
+                    z.attackTimer = 1000; // 1 hit per sec
+                }
+            });
+
+            // Clean up dead entities
+            this.entities.bullets = this.entities.bullets.filter(b => b.active);
+
+            // Handle Zombie Deaths
+            for (let i = this.entities.zombies.length - 1; i >= 0; i--) {
+                const z = this.entities.zombies[i];
+                if (z.hp <= 0) {
+                    this.resources.scrap = Math.min(this.resources.scrapMax, this.resources.scrap + z.scrapReward);
+                    checkQuests('collect_scrap', z.scrapReward);
+
+                    if (Math.random() < 0.2) {
+                        this.resources.data += 1;
+                        checkQuests('collect_data', 1);
+                    }
+
+                    // Death Particles
+                    for (let p = 0; p < 15; p++) {
+                        const vx = (Math.random() - 0.5) * 400;
+                        const vy = -Math.random() * 300 - 100;
+                        const size = Math.random() * 4 + 2;
+                        const color = z.type.includes('Дрон') ? '#555' : '#B71C1C';
+                        this.entities.particles.push(new Particle(z.x, z.y - 15, color, size, vx, vy, 1000 + Math.random() * 1000));
+                    }
+
+                    audioManager.playSfx('zombieDeath');
+                    this.entities.zombies.splice(i, 1);
+                    ui.updateResources();
+                    checkQuests('kill_zombie', 1);
+                }
+            }
+
+            // Handle Soldier Deaths (Permadeath)
+            for (let i = this.squad.length - 1; i >= 0; i--) {
+                if (this.squad[i].hp <= 0) {
+                    ui.showNotification(`Боец ${this.squad[i].type} погиб!`, "error");
+                    this.squad.splice(i, 1);
+                    ui.renderSquad();
+                }
+            }
+
+            // Check game over
+            if (this.squad.length === 0 && this.resources.barricade <= 0) {
+                this.waveInProgress = false;
+                document.getElementById('game-over-screen').classList.remove('hidden');
+            }
+
+            // Check wave clear
+            if (this.entities.zombies.length === 0 && this.waveEnemiesSpawned >= this.waveEnemiesTotal) {
+                this.endWave();
+            }
+
+            // Spawn logic
+            if (this.waveEnemiesSpawned < this.waveEnemiesTotal && this.spawnTimer <= 0) {
+                this.spawnZombie();
+                this.spawnTimer = Math.max(500, 2000 - (this.wave * 100)); // Spawns get faster
+            } else {
+                this.spawnTimer -= dt;
+            }
+        }
+
+        // Update floating texts
+        this.entities.floatingTexts.forEach(ft => ft.update(dt));
+        this.entities.floatingTexts = this.entities.floatingTexts.filter(ft => ft.active);
+
+        // Update particles
+        this.entities.particles.forEach(p => p.update(dt));
+        this.entities.particles = this.entities.particles.filter(p => p.active);
+
+        if (this.screenShakeTime > 0) this.screenShakeTime -= dt;
+
+        // Handle auto-wave countdown
+        if (!this.waveInProgress && this.autoWaveTimer > 0) {
+            const oldTimer = Math.ceil(this.autoWaveTimer / 1000);
+            this.autoWaveTimer -= dt;
+            const newTimer = Math.ceil(this.autoWaveTimer / 1000);
+
+            if (oldTimer !== newTimer && newTimer > 0) {
+                this.addFloatingText(`${newTimer}...`, gameWidth / 2, gameHeight / 2, '#ffb300', 800);
+            }
+
+            if (this.autoWaveTimer <= 0) {
+                this.startWave();
+            }
+        }
+    }
+
+    dismissMerc(index) {
+        if (index < 0 || index >= this.squad.length) return;
+
+        const soldier = this.squad[index];
+        let baseCost = 0;
+        if (soldier.type === 'Новобранец') baseCost = 50;
+        else if (soldier.type === 'Штурмовик') baseCost = 150;
+        else if (soldier.type === 'Снайпер') baseCost = 250;
+
+        const refund = Math.floor((baseCost * (1 - (this.modules.recreation.level * 0.05))) / 2);
+
+        this.resources.scrap = Math.min(this.resources.scrapMax, this.resources.scrap + refund);
+
+        // Teleport/dissolve particles
+        for (let p = 0; p < 20; p++) {
+            const vx = (Math.random() - 0.5) * 200;
+            const vy = -Math.random() * 200 - 50;
+            const size = Math.random() * 4 + 2;
+            this.entities.particles.push(new Particle(soldier.x, soldier.y - 15, '#00f3ff', size, vx, vy, 800 + Math.random() * 500));
+        }
+
+        this.squad.splice(index, 1);
+
+        // Reposition remaining squad
+        this.squad.forEach((s, i) => {
+            s.y = gameHeight - 150 - (i * 40);
+        });
+
+        this.save();
+        ui.updateAll();
+        audioManager.playSfx('click');
+        ui.showNotification(`Боец уволен. Возвращено ${refund} ⚙️`, "info");
+    }
+
+    hireMerc(type) {
+        if (this.squad.length >= 5) {
+            ui.showNotification("Отряд полон!", "error");
+            audioManager.playSfx('error');
+            return;
+        }
+
+        let cost, maxHp, damage, fireRate, color;
+        // Cost reduction from Recreation module
+        const costMod = 1 - (this.modules.recreation.level * 0.05);
+
+        if (type === 'Новобранец') { cost = Math.floor(50 * costMod); maxHp = 100; }
+        else if (type === 'Штурмовик') { cost = Math.floor(150 * costMod); maxHp = 120; }
+        else if (type === 'Снайпер') { cost = Math.floor(250 * costMod); maxHp = 80; }
+
+        if (this.resources.scrap >= cost) {
+            this.resources.scrap -= cost;
+            const newSoldier = new Soldier(type, 50, gameHeight - 150 - (this.squad.length * 40));
+
+            // Apply Kitchen HP buff
+            const hpMultiplier = 1 + (this.modules.kitchen.level * 0.20);
+            newSoldier.maxHp = maxHp * hpMultiplier;
+            newSoldier.hp = newSoldier.maxHp;
+
+            this.squad.push(newSoldier);
+            this.save();
+            ui.updateAll();
+            ui.renderSquad();
+            ui.showNotification(`${type} нанят!`);
+            audioManager.playSfx('click');
+            checkQuests('hire_merc', 1, type);
+            checkQuests('squad_size', this.squad.length);
+        } else {
+            ui.showNotification("Недостаточно хлама!", "error");
+            audioManager.playSfx('error');
+        }
+    }
+
+    drawBunker(ctx) {
+        // Dirt background
+        ctx.fillStyle = '#261f1c';
+        ctx.fillRect(0, 0, bunkerWidth, bunkerHeight);
+
+        // Draw Shaft/Elevator
+        ctx.fillStyle = '#111';
+        ctx.fillRect(50, 50, 40, bunkerHeight);
+
+        const time = Date.now();
+
+        for (const [id, mod] of Object.entries(this.modules)) {
+            const r = mod.layout;
+
+            // Room Background
+            if (mod.level === 0) {
+                // Empty concrete box
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+                ctx.strokeStyle = '#333';
+                ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+                ctx.fillStyle = '#333';
+                ctx.font = '16px Courier New';
+                ctx.fillText(`[${mod.name} пуст]`, r.x + 20, r.y + r.h/2);
+            } else {
+                // Active Room
+                ctx.fillStyle = '#2a2a2a';
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+                ctx.strokeStyle = '#555';
+                ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+                // Common floor/ceiling
+                ctx.fillStyle = '#222';
+                ctx.fillRect(r.x, r.y + r.h - 10, r.w, 10);
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(r.x, r.y, r.w, 5);
+
+                // Specific Visuals
+                if (id === 'generator') {
+                    // Diesel Generator block
+                    ctx.fillStyle = '#444';
+                    ctx.fillRect(r.x + 20, r.y + 40, 100, 70);
+                    // Flashing red lamp
+                    ctx.fillStyle = (time % 1000 < 500) ? 'red' : '#330000';
+                    ctx.shadowBlur = (time % 1000 < 500) ? 10 : 0;
+                    ctx.shadowColor = 'red';
+                    ctx.beginPath();
+                    ctx.arc(r.x + 70, r.y + 35, 5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    // Blue sparks
+                    if (Math.random() < 0.1) {
+                        ctx.fillStyle = '#00f3ff';
+                        ctx.fillRect(r.x + 130 + Math.random()*20, r.y + 40 + Math.random()*40, 3, 3);
+                    }
+                } else if (id === 'workbench') {
+                    // Table
+                    ctx.fillStyle = '#5c4033';
+                    ctx.fillRect(r.x + 50, r.y + 80, 100, 30);
+                    // Tools board
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(r.x + 50, r.y + 20, 100, 40);
+                    // Sparks (welding)
+                    if (Math.random() < 0.2) {
+                        ctx.fillStyle = '#ffb300';
+                        ctx.fillRect(r.x + 70 + Math.random()*10, r.y + 70 + Math.random()*10, 2, 2);
+                    }
+                } else if (id === 'kitchen') {
+                    // Fridge
+                    ctx.fillStyle = '#ddd';
+                    ctx.fillRect(r.x + 20, r.y + 30, 40, 80);
+                    // Stove
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(r.x + 100, r.y + 70, 50, 40);
+                    // Neon FOOD sign
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#00ff00';
+                    ctx.fillStyle = '#00ff00';
+                    ctx.font = '20px Courier New';
+                    ctx.fillText('FOOD', r.x + 100, r.y + 30);
+                    ctx.shadowBlur = 0;
+                } else if (id === 'recreation') {
+                    // Sofa
+                    ctx.fillStyle = '#8b0000';
+                    ctx.fillRect(r.x + 100, r.y + 80, 80, 30);
+                    // TV
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(r.x + 20, r.y + 60, 40, 30);
+                    // TV Glitch
+                    ctx.fillStyle = (time % 200 < 100) ? 'cyan' : 'magenta';
+                    ctx.globalAlpha = 0.5;
+                    ctx.fillRect(r.x + 22, r.y + 62, 36, 26);
+                    ctx.globalAlpha = 1.0;
+                } else if (id === 'storage') {
+                    // Boxes
+                    ctx.fillStyle = '#8b5a2b';
+                    ctx.fillRect(r.x + 20, r.y + 70, 40, 40);
+                    ctx.fillRect(r.x + 70, r.y + 50, 40, 60);
+                    ctx.fillRect(r.x + 120, r.y + 80, 50, 30);
+                } else if (id === 'lab') {
+                    // Servers
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(r.x + 20, r.y + 20, 40, 90);
+                    ctx.fillRect(r.x + 80, r.y + 20, 40, 90);
+                    // Blinking lights
+                    for (let l = 0; l < 5; l++) {
+                        ctx.fillStyle = (time % (300 + l*100) < 150) ? '#00ff00' : '#333';
+                        ctx.fillRect(r.x + 25 + (l%2)*10, r.y + 30 + (l*10), 4, 4);
+                    }
+                    // Glowing flask
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#00f3ff';
+                    ctx.fillStyle = 'rgba(0, 243, 255, 0.5)';
+                    ctx.fillRect(r.x + 150, r.y + 80, 20, 30);
+                    ctx.shadowBlur = 0;
+                }
+
+                // Overlay text
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.font = '12px Courier New';
+                ctx.fillText(`Ур. ${mod.level}`, r.x + r.w - 50, r.y + 20);
+            }
+        }
+
+        // Draw wandering soldiers
+        this.squad.forEach(s => s.drawBunker(ctx));
+    }
+
+    draw(ctx) {
+        ctx.save();
+        if (this.screenShakeTime > 0) {
+            const shakeX = (Math.random() - 0.5) * 10;
+            const shakeY = (Math.random() - 0.5) * 10;
+            ctx.translate(shakeX, shakeY);
+        }
+
+        // Procedural Parallax Background
+
+        // Base Sky
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, -20, gameWidth + 20, gameHeight + 40); // extra bleed for shake
+
+        // Acid Fog / Toxic Atmosphere (Procedural)
+        const timeOffset = Date.now() / 2000;
+        for (let f = 0; f < 10; f++) {
+            const fx = (Math.sin(timeOffset + f) * 200 + (f * gameWidth/10)) % gameWidth;
+            const fy = gameHeight - 150 + Math.cos(timeOffset * 0.5 + f) * 50;
+
+            const gradient = ctx.createRadialGradient(fx, fy, 0, fx, fy, 150);
+            gradient.addColorStop(0, 'rgba(139, 195, 74, 0.05)'); // subtle acid green
+            gradient.addColorStop(1, 'rgba(139, 195, 74, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(fx - 150, fy - 150, 300, 300);
+        }
+
+        // Far Layer: City Skyline
+        ctx.fillStyle = '#111111';
+        // Random deterministic seed based on width so it stays static per resize
+        let seed = 12345;
+        function random() {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // Draw buildings
+        let bx = 0;
+        while(bx < gameWidth) {
+            let bw = 30 + random() * 50;
+            let bh = 150 + random() * 150;
+            ctx.fillRect(bx, gameHeight - 30 - bh, bw, bh);
+            bx += bw + (random() * 20);
+        }
+
+        // Mid Layer: Trash Piles
+        ctx.fillStyle = '#1a1a1a';
+        ctx.beginPath();
+        ctx.moveTo(0, gameHeight - 30);
+        let px = 0;
+        seed = 54321;
+        while (px <= gameWidth) {
+            let step = 40 + random() * 60;
+            let height = 30 + random() * 60;
+            px += step;
+            ctx.lineTo(px, gameHeight - 30 - height);
+        }
+        ctx.lineTo(gameWidth, gameHeight - 30);
+        ctx.lineTo(0, gameHeight - 30);
+        ctx.fill();
+
+        // Ground (Near layer)
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-20, gameHeight - 30, gameWidth + 40, 50);
+
+        // Draw barricade
+        if (this.resources.barricade > 0) {
+            ctx.fillStyle = '#4a4a4a';
+            ctx.fillRect(100, gameHeight - 150, 40, 120);
+            // Barricade HP bar
+            ctx.fillStyle = '#ff3333';
+            ctx.fillRect(100, gameHeight - 160, 40, 5);
+            ctx.fillStyle = '#4caf50';
+            ctx.fillRect(100, gameHeight - 160, 40 * (this.resources.barricade / this.resources.barricadeMax), 5);
+        } else {
+            // Destroyed barricade
+            ctx.fillStyle = '#2a2a2a';
+            ctx.fillRect(100, gameHeight - 60, 40, 30);
+        }
+
+        // Draw entities
+        this.entities.particles.forEach(p => p.draw(ctx));
+        this.squad.forEach(s => s.draw(ctx));
+        this.entities.zombies.forEach(z => z.draw(ctx));
+        this.entities.bullets.forEach(b => b.draw(ctx));
+        this.entities.floatingTexts.forEach(ft => ft.draw(ctx));
+
+        ctx.restore();
+    }
+
+    startWave() {
+        if (this.waveInProgress || (this.squad.length === 0 && this.resources.barricade <= 0)) return;
+        this.waveInProgress = true;
+        this.autoWaveTimer = 0; // Clear timer if manually started
+        this.waveEnemiesTotal = 5 + (this.wave * 3);
+        this.waveEnemiesSpawned = 0;
+        this.spawnTimer = 1000;
+
+        // Transition soldiers to combat
+        this.squad.forEach(s => {
+            s.state = 'combat';
+        });
+
+        document.getElementById('next-wave-btn').disabled = true;
+        ui.showNotification(`Волна ${this.wave} началась!`);
+        checkQuests('reach_wave', this.wave);
+    }
+
+    endWave() {
+        this.waveInProgress = false;
+        this.wave++;
+
+        // Heal soldiers based on kitchen
+        const healPercent = 0.1 + (this.modules.kitchen.level * 0.05);
+        this.squad.forEach(s => {
+            s.hp = Math.min(s.maxHp, s.hp + (s.maxHp * healPercent));
+            s.state = 'wandering'; // Go back to bunker
+        });
+
+        this.save();
+        ui.updateAll();
+        ui.renderSquad();
+        document.getElementById('next-wave-btn').disabled = false;
+        ui.showNotification("Волна отбита! Отряд подлечился.", "info");
+        checkQuests('survive_wave', this.wave - 1);
+
+        // Auto-wave trigger
+        if (document.getElementById('auto-wave-checkbox').checked && this.squad.length > 0) {
+            this.autoWaveTimer = 3000;
+            document.getElementById('next-wave-btn').disabled = true;
+            this.addFloatingText("Следующая волна через 3...", gameWidth / 2 - 100, gameHeight / 2, '#ffb300', 800);
+        }
+    }
+
+    spawnZombie() {
+        const types = ['Ходячий'];
+        if (this.wave >= 3) types.push('Бегун');
+        if (this.wave >= 5) types.push('Бегун', 'Бегун');
+        if (this.wave >= 10 && this.waveEnemiesSpawned === this.waveEnemiesTotal - 1) types.push('Гнилой Танк'); // Boss
+
+        const type = types[Math.floor(Math.random() * types.length)];
+        // Random Y position within some bounds to avoid straight line
+        const yOffset = Math.random() * 40 - 20;
+        const zombie = new Zombie(type, gameWidth, gameHeight - 60 + yOffset, this.wave);
+        this.entities.zombies.push(zombie);
+        this.waveEnemiesSpawned++;
+    }
+
+    addFloatingText(text, x, y, color, life = 800) {
+        const ft = new FloatingText(text, x, y, color);
+        ft.life = life;
+        ft.maxLife = life;
+        this.entities.floatingTexts.push(ft);
+    }
+}
+
+class Soldier {
+    constructor(type, x, y) {
+        this.type = type;
+        this.x = x;
+        this.y = y;
+
+        if (type === 'Новобранец') {
+            this.maxHp = 100; this.damage = 15; this.fireRate = 1200; this.color = '#4CAF50';
+        } else if (type === 'Штурмовик') {
+            this.maxHp = 120; this.damage = 10; this.fireRate = 400; this.color = '#2196F3';
+        } else if (type === 'Снайпер') {
+            this.maxHp = 80; this.damage = 100; this.fireRate = 3000; this.color = '#9C27B0';
+        }
+
+        this.hp = this.maxHp;
+        this.lastShot = 0;
+        this.muzzleTimer = 0;
+
+        this.state = 'combat'; // 'combat' or 'wandering'
+        this.combatX = x;
+        this.combatY = y;
+
+        this.bunkerX = 50; // starting in elevator
+        this.bunkerY = 50;
+        this.targetBunkerX = 50;
+        this.targetBunkerY = 50;
+        this.wanderTimer = 0;
+    }
+
+    update(dt, zombies) {
+        if (this.state === 'combat') {
+            this.lastShot -= dt;
+            if (this.muzzleTimer > 0) this.muzzleTimer -= dt;
+
+            if (this.lastShot <= 0 && zombies.length > 0) {
+                // Find closest zombie
+            let target = zombies[0];
+            let minDist = target.x;
+            for (let i=1; i<zombies.length; i++) {
+                if (zombies[i].x < minDist) {
+                    minDist = zombies[i].x;
+                    target = zombies[i];
+                }
+            }
+
+            // Shoot
+            // Apply buffs
+            const dmgBuff = 1 + (gameState.modules.workbench.level * 0.15);
+            const rateBuff = 1 - (gameState.modules.recreation.level * 0.10);
+
+            // Lab Tech: Crit Chance
+            const critTech = gameState.techTree.find(t => t.id === 'crit');
+            let isCrit = false;
+            if (critTech && Math.random() < critTech.level * critTech.effectPerLevel) {
+                isCrit = true;
+            }
+            const finalDamage = this.damage * dmgBuff * (isCrit ? 2 : 1);
+
+            const bullet = new Bullet(this.x + 10, this.y - 10, target, finalDamage);
+            bullet.isCrit = isCrit;
+            gameState.entities.bullets.push(bullet);
+
+            // Bullet shells particles
+            const shellVx = -Math.random() * 50 - 50;
+            const shellVy = -Math.random() * 100 - 50;
+            gameState.entities.particles.push(new Particle(this.x + 5, this.y - 15, '#FFD700', 2, shellVx, shellVy, 800));
+
+                this.lastShot = this.fireRate * Math.max(0.2, rateBuff);
+                this.muzzleTimer = 50; // 50ms muzzle flash
+
+                audioManager.playSfx('shoot');
+            }
+        } else if (this.state === 'wandering') {
+            // Move towards target in bunker
+            const dx = this.targetBunkerX - this.bunkerX;
+            const dy = this.targetBunkerY - this.bunkerY;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > 5) {
+                const speed = 50; // px/sec
+                this.bunkerX += (dx / dist) * speed * (dt / 1000);
+                this.bunkerY += (dy / dist) * speed * (dt / 1000);
+            } else {
+                this.wanderTimer -= dt;
+                if (this.wanderTimer <= 0) {
+                    // Pick a new random room that is built
+                    const builtRooms = Object.values(gameState.modules).filter(m => m.level > 0);
+                    if (builtRooms.length > 0) {
+                        const room = builtRooms[Math.floor(Math.random() * builtRooms.length)].layout;
+                        this.targetBunkerX = room.x + 20 + Math.random() * (room.w - 40);
+                        this.targetBunkerY = room.y + room.h - 10;
+                    } else {
+                        // Just wander elevator if no rooms
+                        this.targetBunkerX = 50;
+                        this.targetBunkerY = 100 + Math.random() * 200;
+                    }
+                    this.wanderTimer = 2000 + Math.random() * 3000;
+                }
+            }
+        }
+    }
+
+    draw(ctx) {
+        if (this.state !== 'combat') return; // drawn in drawBunker instead
+
+        ctx.fillStyle = this.color;
+        // Body
+        ctx.fillRect(this.x - 10, this.y - 20, 20, 30);
+        // Head
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 25, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gun
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(this.x, this.y - 15, 15, 4);
+
+        // Muzzle Flash
+        if (this.muzzleTimer > 0) {
+            ctx.fillStyle = '#ffb300';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ffb300';
+            ctx.beginPath();
+            ctx.arc(this.x + 18, this.y - 13, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    drawBunker(ctx) {
+        if (this.state !== 'wandering') return;
+
+        ctx.fillStyle = this.color;
+        // Body (smaller for bunker perspective)
+        ctx.fillRect(this.bunkerX - 5, this.bunkerY - 20, 10, 20);
+        // Head
+        ctx.beginPath();
+        ctx.arc(this.bunkerX, this.bunkerY - 22, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+class Zombie {
+    constructor(type, x, y, wave) {
+        this.type = type;
+        this.x = x;
+        this.y = y;
+        this.attackTimer = 0;
+
+        const scale = 1 + (wave * 0.1); // Zombies get stronger with waves
+
+        if (type === 'Ходячий') {
+            this.maxHp = 50 * scale; this.speed = 30; this.damage = 5; this.scrapReward = 5; this.color = '#795548'; this.size = 1;
+        } else if (type === 'Бегун') {
+            this.maxHp = 30 * scale; this.speed = 70; this.damage = 3; this.scrapReward = 8; this.color = '#FF9800'; this.size = 0.8;
+        } else if (type === 'Гнилой Танк') {
+            this.maxHp = 300 * scale; this.speed = 15; this.damage = 25; this.scrapReward = 50; this.color = '#B71C1C'; this.size = 1.8;
+        }
+
+        // Apply Lab Slowdown Tech
+        const slowTech = gameState.techTree.find(t => t.id === 'slow');
+        if (slowTech && slowTech.level > 0) {
+            this.speed *= (1 - (slowTech.level * slowTech.effectPerLevel));
+        }
+
+        this.hp = this.maxHp;
+        this.hitFlashTimer = 0;
+    }
+
+    update(dt) {
+        if (this.attackTimer > 0) this.attackTimer -= dt;
+        if (this.hitFlashTimer > 0) this.hitFlashTimer -= dt;
+
+        // Move if not at barricade
+        if (this.x > 140 || (gameState.resources.barricade <= 0 && this.x > 50)) {
+            this.x -= this.speed * (dt / 1000);
+        }
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = this.hitFlashTimer > 0 ? '#ffffff' : this.color;
+        const w = 20 * this.size;
+        const h = 30 * this.size;
+
+        // Body
+        ctx.fillRect(this.x - w/2, this.y - h, w, h);
+        // Head
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - h - (5*this.size), 8*this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing Eyes
+        ctx.fillStyle = 'red';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = 'red';
+        ctx.fillRect(this.x - 4*this.size, this.y - h - 6*this.size, 2*this.size, 2*this.size);
+        ctx.fillRect(this.x, this.y - h - 6*this.size, 2*this.size, 2*this.size);
+        ctx.shadowBlur = 0;
+
+        // HP Bar
+        ctx.fillStyle = '#ff3333';
+        ctx.fillRect(this.x - w/2, this.y - h - 20, w, 4);
+        ctx.fillStyle = '#4caf50';
+        ctx.fillRect(this.x - w/2, this.y - h - 20, w * (this.hp / this.maxHp), 4);
+    }
+}
+
+class Bullet {
+    constructor(x, y, target, damage) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.damage = damage;
+        this.speed = 800; // pixels per sec
+        this.active = true;
+    }
+
+    update(dt) {
+        if (!this.active || !this.target || this.target.hp <= 0) {
+            this.active = false;
+            return;
+        }
+
+        const dx = this.target.x - this.x;
+        const dy = (this.target.y - 15) - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 10) {
+            // Hit
+            this.target.hp -= this.damage;
+            this.target.hitFlashTimer = 50; // 50ms hit flash
+
+            if (this.isCrit) {
+                gameState.addFloatingText(`CRIT ${Math.floor(this.damage)}`, this.target.x, this.target.y - 40, '#ff3333');
+            } else {
+                gameState.addFloatingText(`${Math.floor(this.damage)}`, this.target.x, this.target.y - 40, '#ffb300');
+            }
+
+            this.active = false;
+        } else {
+            // Move
+            const moveAmt = this.speed * (dt / 1000);
+            this.x += (dx / dist) * moveAmt;
+            this.y += (dy / dist) * moveAmt;
+        }
+    }
+
+    draw(ctx) {
+        ctx.shadowBlur = 10;
+
+        // Special color for high damage (sniper)
+        if (this.damage > 50) {
+            ctx.fillStyle = '#ff3333';
+            ctx.shadowColor = '#ff3333';
+            ctx.strokeStyle = 'rgba(255, 51, 51, 0.8)';
+        } else {
+            ctx.fillStyle = '#00f3ff';
+            ctx.shadowColor = '#00f3ff';
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.8)';
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tracer
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - 15, this.y);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Particle {
+    constructor(x, y, color, size, vx, vy, life) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = size;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = life;
+        this.maxLife = life;
+        this.active = true;
+        this.gravity = 800; // pixels per sec^2
+        this.floorY = gameHeight - 30;
+    }
+
+    update(dt) {
+        if (!this.active) return;
+
+        const dtSec = dt / 1000;
+
+        this.vy += this.gravity * dtSec;
+        this.x += this.vx * dtSec;
+        this.y += this.vy * dtSec;
+
+        // Floor collision
+        if (this.y >= this.floorY) {
+            this.y = this.floorY;
+            this.vy = -this.vy * 0.4; // Bounce
+            this.vx *= 0.8; // Friction
+        }
+
+        this.life -= dt;
+        if (this.life <= 0) this.active = false;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class FloatingText {
+    constructor(text, x, y, color) {
+        this.text = text;
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.life = 800; // ms
+        this.maxLife = 800;
+        this.active = true;
+    }
+
+    update(dt) {
+        this.life -= dt;
+        this.y -= 20 * (dt / 1000); // Float up
+        if (this.life <= 0) this.active = false;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        ctx.fillStyle = this.color;
+        ctx.font = '14px Courier New';
+        ctx.fontWeight = 'bold';
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+
+// ==========================================
+// GAME LOOP
+// ==========================================
+
+function resizeCanvas() {
+    const combatParent = document.getElementById('combat-zone');
+    canvas.width = combatParent.clientWidth;
+    canvas.height = combatParent.clientHeight;
+    gameWidth = canvas.width;
+    gameHeight = canvas.height;
+
+    const bunkerParent = document.getElementById('management-zone');
+    bunkerCanvas.width = bunkerParent.clientWidth;
+    bunkerCanvas.height = bunkerParent.clientHeight;
+    bunkerWidth = bunkerCanvas.width;
+    bunkerHeight = bunkerCanvas.height;
+}
+
+function gameLoop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    if (gameState) {
+        gameState.update(dt);
+        ctx.clearRect(0, 0, gameWidth, gameHeight);
+        gameState.draw(ctx);
+
+        bunkerCtx.clearRect(0, 0, bunkerWidth, bunkerHeight);
+        gameState.drawBunker(bunkerCtx);
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+// ==========================================
+// UI MANAGER
+// ==========================================
+const ui = {
+    setupBunkerInteractions() {
+        bunkerCanvas.addEventListener('click', (e) => {
+            const rect = bunkerCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            for (const [id, mod] of Object.entries(gameState.modules)) {
+                const r = mod.layout;
+                if (mouseX >= r.x && mouseX <= r.x + r.w && mouseY >= r.y && mouseY <= r.y + r.h) {
+                    ui.openRoomModal(id, mod);
+                    return;
+                }
+            }
+        });
+
+        // Close modals
+        document.querySelectorAll('.close-modal').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.target.closest('.modal').classList.add('hidden');
+            });
+        });
+
+        // Open generic modals
+        document.querySelectorAll('.ui-menu-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const targetId = e.target.getAttribute('data-target');
+                document.getElementById(targetId).classList.remove('hidden');
+            });
+        });
+    },
+
+    openRoomModal(id, mod) {
+        document.getElementById('modal-room-title').innerText = `${mod.name} (Ур. ${mod.level}/${mod.maxLevel})`;
+        document.getElementById('modal-room-desc').innerText = mod.desc;
+
+        let energyReq = id !== 'generator' ? `Требует: ${(mod.level + 1) * 5} ⚡` : `Дает: ${(mod.level+1)*10} ⚡`;
+        if (mod.level >= mod.maxLevel) energyReq = "Макс. уровень";
+
+        document.getElementById('modal-room-stats').innerText = energyReq;
+
+        const btn = document.getElementById('modal-room-upgrade-btn');
+        if (mod.level >= mod.maxLevel) {
+            btn.disabled = true;
+            btn.innerText = "MAX";
+        } else {
+            btn.disabled = false;
+            btn.innerText = `Улучшить (${mod.cost} ⚙️)`;
+            btn.onclick = () => {
+                gameState.upgradeModule(id);
+                ui.openRoomModal(id, gameState.modules[id]); // refresh
+            };
+        }
+
+        const labTech = document.getElementById('modal-lab-tech');
+        if (id === 'lab' && mod.level > 0) {
+            labTech.classList.remove('hidden');
+            ui.renderTechTree();
+        } else {
+            labTech.classList.add('hidden');
+        }
+
+        document.getElementById('modal-room-upgrade').classList.remove('hidden');
+    },
+
+    renderTechTree() {
+        const container = document.getElementById('tech-tree-container');
+        container.innerHTML = '';
+
+        gameState.techTree.forEach(tech => {
+            const div = document.createElement('div');
+            div.className = 'tech-item';
+            div.innerHTML = `
+                <span>${tech.name} (Ур. ${tech.level}/${tech.maxLevel})</span>
+                <button ${tech.level >= tech.maxLevel ? 'disabled' : ''} onclick="gameState.upgradeTech('${tech.id}')">
+                    ${tech.level >= tech.maxLevel ? 'MAX' : tech.cost + ' 💾'}
+                </button>
+            `;
+            container.appendChild(div);
+        });
+    },
+
+    showNotification(msg, type = 'info') {
+        const container = document.getElementById('notification-container');
+        const notif = document.createElement('div');
+        notif.className = 'notification';
+        notif.style.borderColor = type === 'error' ? '#ff3333' : '#ffb300';
+        notif.style.color = type === 'error' ? '#ff3333' : '#ffb300';
+        notif.innerText = msg;
+        container.appendChild(notif);
+        setTimeout(() => {
+            if(container.contains(notif)) container.removeChild(notif);
+        }, 3000);
+    },
+
+    updateResources() {
+        document.getElementById('res-scrap').innerText = Math.floor(gameState.resources.scrap);
+        document.getElementById('res-scrap-max').innerText = gameState.resources.scrapMax;
+        document.getElementById('res-data').innerText = gameState.resources.data;
+        document.getElementById('res-energy').innerText = gameState.resources.energy;
+        document.getElementById('res-barricade').innerText = Math.max(0, Math.floor(gameState.resources.barricade));
+        document.getElementById('res-barricade-max').innerText = gameState.resources.barricadeMax;
+        document.getElementById('res-wave').innerText = gameState.wave;
+    },
+
+    renderHiring() {
+        const container = document.getElementById('mercs-container');
+        container.innerHTML = '';
+
+        const costMod = 1 - (gameState.modules.recreation.level * 0.05);
+        const mercs = [
+            { type: 'Новобранец', cost: Math.floor(50 * costMod), desc: 'Обычный пистолет. Базовый юнит.', hp: 100, dmg: 15, spd: 'Средне' },
+            { type: 'Штурмовик', cost: Math.floor(150 * costMod), desc: 'Автомат. Очень быстрая стрельба.', hp: 120, dmg: 10, spd: 'Быстро' },
+            { type: 'Снайпер', cost: Math.floor(250 * costMod), desc: 'Винтовка. Редко, но метко.', hp: 80, dmg: 100, spd: 'Медленно' }
+        ];
+
+        mercs.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <h4>${m.type}</h4>
+                <p>${m.desc}</p>
+                <div class="stats">HP: ${m.hp} | Урон: ${m.dmg} | Скор.: ${m.spd}</div>
+                <button onclick="gameState.hireMerc('${m.type}')">Нанять (${m.cost} ⚙️)</button>
+            `;
+            container.appendChild(card);
+        });
+    },
+
+    renderSquad() {
+        const container = document.getElementById('active-squad-container');
+        container.innerHTML = '';
+
+        gameState.squad.forEach((s, index) => {
+            const div = document.createElement('div');
+            div.className = 'squad-item';
+            const hpPct = (s.hp / s.maxHp) * 100;
+            div.innerHTML = `
+                <div class="squad-item-info">
+                    <div class="squad-item-name">${s.type}</div>
+                    <div class="squad-item-hp-bar">
+                        <div class="squad-item-hp-fill" style="width: ${hpPct}%"></div>
+                    </div>
+                </div>
+                <div style="color: #bbb; font-size: 12px; margin-left: 10px; margin-right: 10px;">
+                    HP: ${Math.floor(s.hp)}/${Math.floor(s.maxHp)}
+                </div>
+                <button onclick="gameState.dismissMerc(${index})" style="padding: 5px; background: #ff3333; color: white; border: none; cursor: pointer; border-radius: 3px;" title="Уволить (вернет 50% хлама)">✖</button>
+            `;
+            container.appendChild(div);
+        });
+    },
+
+    renderQuests() {
+        const container = document.getElementById('quests-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        gameState.allQuests.forEach(q => {
+            const completed = gameState.completedQuests.includes(q.id);
+            const div = document.createElement('div');
+            div.className = 'quest-item';
+
+            let progressText = "";
+            if (!completed) {
+                if (q.type === 'kill_zombie') progressText = `${gameState.questProgress.zombiesKilled} / ${q.target}`;
+                else if (q.type === 'build_module') progressText = `Ур. ${gameState.modules[q.targetId].level} / ${q.targetLvl}`;
+                else if (q.type === 'collect_scrap') progressText = `${gameState.questProgress.scrapCollected || 0} / ${q.target}`;
+                else if (q.type === 'collect_data') progressText = `${gameState.questProgress.dataCollected || 0} / ${q.target}`;
+                else progressText = "В процессе...";
+            }
+
+            div.innerHTML = `
+                <div class="quest-info">
+                    <h4>${q.title}</h4>
+                    <p>${q.desc}</p>
+                    <div class="quest-reward">Награда: ${q.reward.scrap > 0 ? q.reward.scrap + ' ⚙️ ' : ''}${q.reward.data > 0 ? q.reward.data + ' 💾' : ''}</div>
+                </div>
+                <div class="quest-status ${completed ? 'completed' : ''}">
+                    ${completed ? 'ВЫПОЛНЕНО' : `<span class="quest-progress-text">${progressText}</span>`}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    },
+
+    updateAll() {
+        this.updateResources();
+        this.renderHiring();
+        this.renderSquad();
+        this.renderQuests();
+    }
+};
+
+// Start Wave button event
+document.getElementById('next-wave-btn').addEventListener('click', () => {
+    if (gameState) gameState.startWave();
+});
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+
+function init() {
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    gameState = new GameState();
+
+    // Give some starting resources for testing
+    gameState.resources.scrap = 200;
+
+    audioManager.init();
+    document.getElementById('mute-btn').addEventListener('click', () => {
+        audioManager.toggleMute();
+    });
+
+    gameState.load();
+    ui.setupBunkerInteractions();
+    ui.updateAll();
+
+    // Setup Restart Button
+    document.getElementById('restart-btn').addEventListener('click', () => {
+        localStorage.removeItem('revotick_save');
+        location.reload();
+    });
+
+    // 10-second auto save interval
+    setInterval(() => {
+        if (gameState) {
+            gameState.save();
+            ui.showNotification("Автосохранение...", "info");
+        }
+    }, 10000);
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Start game
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>
